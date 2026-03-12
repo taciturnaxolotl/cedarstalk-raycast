@@ -7,9 +7,9 @@
   "author": "taciturnaxolotl",
   "license": "MIT",
   "platforms": [
-    "macos"
+    "macOS"
   ],
-  "categories": ["Education", "Web"],
+  "categories": ["Productivity", "Web"],
   "commands": [
     {
       "name": "search-directory",
