@@ -807,15 +807,20 @@ export default function SearchDirectory() {
           icon={query.trim() ? Icon.MagnifyingGlass : Icon.Person}
         />
       ) : (
-        results.map((person) => (
-          <PersonListItem
-            key={person.Id}
-            person={person}
-            photoPath={photoPaths[person.Id] ?? null}
-            cookie={authState.cookie}
-            onSignOut={handleSignOut}
-          />
-        ))
+        <List.Section
+          title={`${results.length} result${results.length !== 1 ? "s" : ""}`}
+          footer={cacheSize > 0 ? `${cacheSize} people cached` : undefined}
+        >
+          {results.map((person) => (
+            <PersonListItem
+              key={person.Id}
+              person={person}
+              photoPath={photoPaths[person.Id] ?? null}
+              cookie={authState.cookie}
+              onSignOut={handleSignOut}
+            />
+          ))}
+        </List.Section>
       )}
     </List>
   );
