@@ -1,17 +1,29 @@
-# cedarstalk-raycast
+# CedarStalk
 
-cedarstalking with keyboard shortcuts
+![detail of a user](./metadata/cedarstalk-1.png)
 
-The canonical repo for this is hosted on tangled over at [`dunkirk.sh/cedarstalk-raycast`](https://tangled.org/dunkirk.sh/cedarstalk-raycast)
+Search the Cedarville University student and staff directory from Raycast. Look up anyone by name, view their schedule, majors, office, and contact info -- all without opening a browser.
 
-<p align="center">
-    <img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/main/.github/images/line-break.svg" />
-</p>
+## Features
 
-<p align="center">
-    <i><code>&copy; 2026-present <a href="https://dunkirk.sh">Kieran Klukas</a></code></i>
-</p>
+- Search by first name, last name, or both
+- Filter by population type (undergraduate, graduate, etc.) or department
+- View class schedules, majors, minors, advisors, and office locations
+- Profile photos loaded automatically
+- Results cached locally for instant fuzzy search
+- Copy email, phone, or ID
 
-<p align="center">
-    <a href="https://tangled.org/dunkirk.sh/cedarstalk-raycast/blob/main/LICENSE.md"><img src="https://img.shields.io/static/v1.svg?style=for-the-badge&label=License&message=O'Saasy&logoColor=d9e0ee&colorA=363a4f&colorB=b7bdf8"/></a>
-</p>
+## Setup
+
+You need a Cedarville University account to use this extension.
+
+1. Open the **Search Cedarville Directory** command
+2. Click **Sign In** — a small login window will open
+3. Complete SSO login with your Cedarville credentials
+4. The window closes automatically and you're ready to search
+
+Your session cookie is stored securely in Raycast's local storage. Use **Sign Out** (⌘⇧S) from any result to log out.
+
+## Note
+
+This extension is only useful if you have a Cedarville University account. It accesses the same directory available at [selfservice.cedarville.edu](https://selfservice.cedarville.edu/cedarinfo/directory).

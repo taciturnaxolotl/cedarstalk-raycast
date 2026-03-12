@@ -4,18 +4,22 @@
   "title": "CedarStalk",
   "description": "Search the Cedarville University student/staff directory",
   "icon": "icon.png",
-  "author": "kierank",
+  "author": "taciturnaxolotl",
   "license": "MIT",
+  "platforms": [
+    "macos"
+  ],
+  "categories": ["Education", "Web"],
   "commands": [
     {
       "name": "search-directory",
-      "title": "Search Directory",
+      "title": "Search Cedarville Directory",
       "description": "Search the Cedarville directory by name",
       "mode": "view"
     }
   ],
   "dependencies": {
-    "@raycast/api": "^1.93.2"
+    "@raycast/api": "^1.104.9"
   },
   "devDependencies": {
     "@raycast/utils": "^1.17.0",
