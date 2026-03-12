@@ -2,6 +2,7 @@ const BASE_URL = "https://selfservice.cedarville.edu";
 
 export interface DirectoryPerson {
   Id: string;
+  isFaculty?: boolean; // resolved from Info/Json; heuristic until confirmed
   Username: string;
   FirstName: string;
   LastName: string;

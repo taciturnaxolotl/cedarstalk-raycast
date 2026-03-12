@@ -85,6 +85,13 @@ function formatPhone(phone: string): string {
   return /^\d{4}$/.test(phone.trim()) ? `ext. ${phone.trim()}` : phone;
 }
 
+const FACULTY_TITLE_KEYWORDS = /professor|instructor|lecturer|faculty/i;
+
+function isFacultyHeuristic(person: DirectoryPerson): boolean {
+	if (person.isFaculty !== undefined) return person.isFaculty;
+	return !!person.Title && FACULTY_TITLE_KEYWORDS.test(person.Title);
+}
+
 function parseSearchQuery(query: string): {
   firstName: string;
   lastName: string;
@@ -139,7 +146,14 @@ function PersonDetail({
           return now >= start && now <= end;
         }) ?? terms[0];
       const result = await getPersonInfo(person.Id, current.code, cookie);
-      if (result) setInfo(result);
+      if (result) {
+        setInfo(result);
+        // Write confirmed isFaculty back to cache
+        const confirmed = result.faculty.isFaculty;
+        if (person.isFaculty !== confirmed) {
+          await mergePeopleIntoCache([{ ...person, isFaculty: confirmed }]);
+        }
+      }
     })();
   }, [person.Id, cookie]);
 
@@ -150,7 +164,7 @@ function PersonDetail({
   const isStaff = !person.StudentType || !!(person.Title?.trim() && person.OfficeBuildingCode);
   const tags: string[] = [];
   if (isStaff) {
-    tags.push("Staff");
+    tags.push(isFacultyHeuristic(person) ? "Faculty" : "Staff");
   } else if (person.StudentType === "DE") {
     tags.push("Dual Enrollment");
   } else {
@@ -211,7 +225,10 @@ function PersonDetail({
             person.studentWorker) && <Detail.Metadata.Separator />}
           {isStaff ? (
             <Detail.Metadata.TagList title="Role">
-              <Detail.Metadata.TagList.Item text="Staff" color={Color.Green} />
+              <Detail.Metadata.TagList.Item
+                text={isFacultyHeuristic(person) ? "Faculty" : "Staff"}
+                color={isFacultyHeuristic(person) ? Color.Orange : Color.Green}
+              />
             </Detail.Metadata.TagList>
           ) : person.StudentType === "DE" ? (
             <Detail.Metadata.TagList title="Program">
@@ -263,13 +280,13 @@ function PersonDetail({
               }
             />
           )}
-          {person.OfficeBuildingName && (
+          {person.OfficeBuildingCode && (
             <Detail.Metadata.Label
               title="Office"
               text={
                 person.OfficeRoom
-                  ? `${person.OfficeBuildingName}, Room ${person.OfficeRoom}`
-                  : person.OfficeBuildingName
+                  ? `${person.OfficeBuildingCode} ${person.OfficeRoom}`
+                  : person.OfficeBuildingCode
               }
             />
           )}
@@ -419,7 +436,8 @@ function PersonListItem({
   // Badge
   let badge: List.Item.Accessory | null = null;
   if (!isStudent) {
-    badge = { tag: { value: "Staff", color: Color.Green } };
+    const faculty = isFacultyHeuristic(person);
+    badge = { tag: { value: faculty ? "Faculty" : "Staff", color: faculty ? Color.Orange : Color.Green } };
   } else if (person.StudentType === "DE") {
     badge = { tag: { value: "DE", color: Color.Orange } };
   } else if (person.StudentType === "GS" || person.StudentClass === "GS") {
