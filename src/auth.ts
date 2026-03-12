@@ -67,6 +67,16 @@ export async function launchAuthBrowser(signInUrl: string): Promise<string> {
 }
 
 async function ensureBinary(): Promise<string> {
+  if (!environment.isDevelopment) {
+    // Production: use the pre-compiled universal binary bundled in assets.
+    // Re-sign ad-hoc if the signature was stripped (e.g. by Raycast's distribution pipeline).
+    const binaryPath = path.join(environment.assetsPath, "auth-browser-bin");
+    const valid = await execAsync(`codesign --verify "${binaryPath}"`).then(() => true).catch(() => false);
+    if (!valid) await execAsync(`codesign --sign - --force "${binaryPath}"`);
+    return binaryPath;
+  }
+
+  // Development: compile from source so changes to the Swift file are picked up
   const swiftSrc = path.join(environment.assetsPath, "auth-browser.swift");
   const binaryPath = path.join(environment.supportPath, "auth-browser");
 
