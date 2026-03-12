@@ -220,7 +220,7 @@ function PersonDetail({
               text={person.DepartmentDescription}
             />
           )}
-          {(isStaff ||
+          {!!(isStaff ||
             person.StudentClass ||
             person.studentWorker) && <Detail.Metadata.Separator />}
           {isStaff ? (
@@ -267,7 +267,7 @@ function PersonDetail({
               />
             </Detail.Metadata.TagList>
           )}
-          {(person.DormName ||
+          {!!(person.DormName ||
             person.OfficeBuildingName ||
             person.OfficePhone) && <Detail.Metadata.Separator />}
           {person.DormName && (
@@ -296,10 +296,10 @@ function PersonDetail({
               text={formatPhone(person.OfficePhone)}
             />
           )}
-          {(person.AddressCity || person.AddressState) && (
+          {!!(person.AddressCity || person.AddressState) && (
             <Detail.Metadata.Separator />
           )}
-          {(person.AddressCity || person.AddressState) && (
+          {!!(person.AddressCity || person.AddressState) && (
             <Detail.Metadata.Label
               title="Hometown"
               text={[person.AddressCity, person.AddressState]
