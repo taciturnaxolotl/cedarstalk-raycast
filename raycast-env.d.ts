@@ -14,7 +14,10 @@ declare type Preferences = ExtensionPreferences
 
 declare namespace Preferences {
   /** Preferences accessible in the `search-directory` command */
-  export type SearchDirectory = ExtensionPreferences & {}
+  export type SearchDirectory = ExtensionPreferences & {
+  /** Demo Mode - Redact personal information for screenshots and demos */
+  "demoMode": boolean
+}
 }
 
 declare namespace Arguments {
