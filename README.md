@@ -1,4 +1,4 @@
-# CedarStalk
+# Cedarville People Search
 
 ![detail of a user](./media/cedarstalk-1.png)
 

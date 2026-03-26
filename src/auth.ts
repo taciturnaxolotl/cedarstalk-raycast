@@ -1,6 +1,6 @@
-import { environment, LocalStorage } from "@raycast/api";
+import { environment, LocalStorage, showToast, Toast } from "@raycast/api";
 import { exec, spawn } from "child_process";
-import { access, mkdir, readFile, symlink, unlink, writeFile } from "fs/promises";
+import { mkdir, readFile, stat, symlink, unlink, writeFile } from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { promisify } from "util";
@@ -8,11 +8,9 @@ import { promisify } from "util";
 const execAsync = promisify(exec);
 const COOKIE_KEY = "session_cookie";
 
-// Use /tmp directly (not os.tmpdir) so paths match the Swift binary's hardcoded CONFIG_FILE.
+// Use /tmp directly (not os.tmpdir) so paths match the Swift binary's hardcoded path.
 // os.tmpdir() under Raycast returns /var/folders/…/T which differs from /tmp.
-const CONFIG_FILE = "/tmp/cedarstalk-auth-config.json";
-const COOKIE_FILE = "/tmp/cedarstalk-cookie.txt";
-const LOG_FILE = "/tmp/cedarstalk-auth.log";
+const COOKIE_FILE = "/tmp/cedarsearch-cookie.txt";
 
 // ─── Cookie storage ────────────────────────────────────────────────────────
 
@@ -43,19 +41,19 @@ export async function drainPendingCookie(): Promise<string | undefined> {
 // ─── Auth browser ──────────────────────────────────────────────────────────
 
 // Opens an isolated WKWebView window via a temporary .app bundle so macOS
-// grants it proper window-server access. Config is passed via a JSON file
-// (not --args) to avoid Launch Services caching stale arguments.
-export async function launchAuthBrowser(signInUrl: string): Promise<string> {
+// grants it proper window-server access via Launch Services.
+//
+// The Swift source in assets/auth-browser.swift is compiled on first launch
+// and cached in supportPath — no pre-built binary is shipped with the
+// extension. Compilation requires the Xcode Command Line Tools (swiftc).
+export async function launchAuthBrowser(): Promise<string> {
   const binaryPath = await ensureBinary();
   const appBundle = await ensureAppBundle(binaryPath);
 
-  // Write config before launch — Swift reads this instead of using --args
   await unlink(COOKIE_FILE).catch(() => {});
-  await unlink(LOG_FILE).catch(() => {});
   // Pre-create with owner-only permissions so the cookie is never world-readable.
   // Swift writes non-atomically to preserve these permissions.
   await writeFile(COOKIE_FILE, "", { mode: 0o600 });
-  await writeFile(CONFIG_FILE, JSON.stringify({ signInUrl, cookieFile: COOKIE_FILE, logFile: LOG_FILE }));
 
   await new Promise<void>((resolve, reject) => {
     const proc = spawn("open", ["-n", "-W", appBundle], { stdio: "ignore" });
@@ -63,46 +61,58 @@ export async function launchAuthBrowser(signInUrl: string): Promise<string> {
     proc.on("error", reject);
   });
 
-  const log = await readFile(LOG_FILE, "utf-8").catch(() => "(no log)");
-  await unlink(LOG_FILE).catch(() => {});
-
   const cookie = await readFile(COOKIE_FILE, "utf-8").then((s) => s.trim()).catch(() => "");
   await unlink(COOKIE_FILE).catch(() => {});
-  await unlink(CONFIG_FILE).catch(() => {});
 
-  if (!cookie) throw new Error(`Sign-in cancelled. Log:\n${log}`);
+  if (!cookie) throw new Error("Sign-in cancelled.");
   return cookie;
 }
 
+// Compile assets/auth-browser.swift on first launch; cache in supportPath.
+// Recompiles automatically if the Swift source is newer than the cached binary
+// (e.g. after an extension update or a stale binary from a previous approach).
 async function ensureBinary(): Promise<string> {
-  if (!environment.isDevelopment) {
-    const binaryPath = path.join(environment.assetsPath, "auth-browser-bin");
-    const valid = await execAsync(`codesign --verify "${binaryPath}"`).then(() => true).catch(() => false);
-    if (!valid) await execAsync(`codesign --sign - --force "${binaryPath}"`);
-    return binaryPath;
-  }
-
-  const swiftSrc = path.join(environment.assetsPath, "auth-browser.swift");
   const binaryPath = path.join(environment.supportPath, "auth-browser");
-
+  const swiftSrc = path.join(environment.assetsPath, "auth-browser.swift");
   try {
-    await access(binaryPath);
-    return binaryPath;
+    const [binStat, srcStat] = await Promise.all([stat(binaryPath), stat(swiftSrc)]);
+    if (binStat.mtimeMs >= srcStat.mtimeMs) return binaryPath;
+    // source is newer — fall through to recompile
   } catch {
-    await mkdir(environment.supportPath, { recursive: true });
-    await execAsync(`swiftc -O "${swiftSrc}" -o "${binaryPath}"`);
-    await execAsync(`codesign --sign - --force "${binaryPath}"`);
-    return binaryPath;
+    // binary doesn't exist yet — fall through to compile
   }
+
+  const hasSwiftc = await execAsync("xcrun --find swiftc").then(() => true).catch(() => false);
+  if (!hasSwiftc) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Xcode Command Line Tools required",
+      message: "Run `xcode-select --install` in Terminal, then try again.",
+    });
+    throw new Error("swiftc not found — install Xcode Command Line Tools");
+  }
+
+  await mkdir(environment.supportPath, { recursive: true });
+
+  const toast = await showToast({ style: Toast.Style.Animated, title: "Compiling sign-in helper…" });
+  try {
+    // Use `xcrun swiftc` (not the raw path) so xcrun sets up DEVELOPER_DIR and
+    // the correct SDK — running the swiftc binary directly loses that context.
+    await execAsync(`xcrun swiftc -O "${swiftSrc}" -o "${binaryPath}"`);
+  } finally {
+    await toast.hide();
+  }
+
+  return binaryPath;
 }
 
 async function ensureAppBundle(binaryPath: string): Promise<string> {
-  const appDir = path.join(os.tmpdir(), "CedarStalkAuth.app");
+  const appDir = path.join(os.tmpdir(), "CedarvilleAuth.app");
   const macosDir = path.join(appDir, "Contents", "MacOS");
   const plistPath = path.join(appDir, "Contents", "Info.plist");
-  const bundledBinary = path.join(macosDir, "CedarStalkAuth");
+  const bundledBinary = path.join(macosDir, "auth-browser");
 
-  // Always recreate fresh so LS sees a new bundle
+  // Always recreate fresh so Launch Services sees a new bundle.
   await execAsync(`rm -rf "${appDir}"`).catch(() => {});
   await mkdir(macosDir, { recursive: true });
   await symlink(binaryPath, bundledBinary);
@@ -112,9 +122,9 @@ async function ensureAppBundle(binaryPath: string): Promise<string> {
 <plist version="1.0">
 <dict>
 \t<key>CFBundlePackageType</key><string>APPL</string>
-\t<key>CFBundleExecutable</key><string>CedarStalkAuth</string>
-\t<key>CFBundleIdentifier</key><string>sh.dunkirk.cedarstalk.auth</string>
-\t<key>CFBundleName</key><string>CedarStalk Auth</string>
+\t<key>CFBundleExecutable</key><string>auth-browser</string>
+\t<key>CFBundleIdentifier</key><string>sh.dunkirk.cedarville-people-search.auth</string>
+\t<key>CFBundleName</key><string>Cedarville Auth</string>
 \t<key>NSPrincipalClass</key><string>NSApplication</string>
 \t<key>NSHighResolutionCapable</key><true/>
 \t<key>LSMinimumSystemVersion</key><string>13.0</string>

@@ -35,7 +35,6 @@ import {
 import { getCacheSize, mergePeopleIntoCache, searchCache } from "./cache";
 import { getCachedPhotoPath } from "./images";
 
-const SIGN_IN_URL = "https://selfservice.cedarville.edu/cedarinfo/directory";
 
 type AuthState =
   | { kind: "loading" }
@@ -666,9 +665,6 @@ export default function SearchDirectory() {
   useEffect(() => {
     (async () => {
       let cookie = await getStoredCookie();
-
-      // Raycast may have closed mid-auth while the Swift browser was still
-      // running. If it finished and wrote the cookie file, pick it up now.
       if (!cookie) {
         const pending = await drainPendingCookie();
         if (pending) {
@@ -805,7 +801,7 @@ export default function SearchDirectory() {
       message: "Complete login in the window that opens",
     });
     try {
-      const cookie = await launchAuthBrowser(SIGN_IN_URL);
+      const cookie = await launchAuthBrowser();
       await storeCookie(cookie);
       toast.style = Toast.Style.Success;
       toast.title = "Signed in!";
