@@ -61,7 +61,9 @@ export async function launchAuthBrowser(): Promise<string> {
     proc.on("error", reject);
   });
 
-  const cookie = await readFile(COOKIE_FILE, "utf-8").then((s) => s.trim()).catch(() => "");
+  const cookie = await readFile(COOKIE_FILE, "utf-8")
+    .then((s) => s.trim())
+    .catch(() => "");
   await unlink(COOKIE_FILE).catch(() => {});
 
   if (!cookie) throw new Error("Sign-in cancelled.");
@@ -75,14 +77,19 @@ async function ensureBinary(): Promise<string> {
   const binaryPath = path.join(environment.supportPath, "auth-browser");
   const swiftSrc = path.join(environment.assetsPath, "auth-browser.swift");
   try {
-    const [binStat, srcStat] = await Promise.all([stat(binaryPath), stat(swiftSrc)]);
+    const [binStat, srcStat] = await Promise.all([
+      stat(binaryPath),
+      stat(swiftSrc),
+    ]);
     if (binStat.mtimeMs >= srcStat.mtimeMs) return binaryPath;
     // source is newer — fall through to recompile
   } catch {
     // binary doesn't exist yet — fall through to compile
   }
 
-  const hasSwiftc = await execAsync("xcrun --find swiftc").then(() => true).catch(() => false);
+  const hasSwiftc = await execAsync("xcrun --find swiftc")
+    .then(() => true)
+    .catch(() => false);
   if (!hasSwiftc) {
     await showToast({
       style: Toast.Style.Failure,
@@ -94,7 +101,10 @@ async function ensureBinary(): Promise<string> {
 
   await mkdir(environment.supportPath, { recursive: true });
 
-  const toast = await showToast({ style: Toast.Style.Animated, title: "Compiling sign-in helper…" });
+  const toast = await showToast({
+    style: Toast.Style.Animated,
+    title: "Compiling sign-in helper…",
+  });
   try {
     // Use `xcrun swiftc` (not the raw path) so xcrun sets up DEVELOPER_DIR and
     // the correct SDK — running the swiftc binary directly loses that context.
@@ -117,7 +127,9 @@ async function ensureAppBundle(binaryPath: string): Promise<string> {
   await mkdir(macosDir, { recursive: true });
   await symlink(binaryPath, bundledBinary);
 
-  await writeFile(plistPath, `<?xml version="1.0" encoding="UTF-8"?>
+  await writeFile(
+    plistPath,
+    `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -129,7 +141,8 @@ async function ensureAppBundle(binaryPath: string): Promise<string> {
 \t<key>NSHighResolutionCapable</key><true/>
 \t<key>LSMinimumSystemVersion</key><string>13.0</string>
 </dict>
-</plist>`);
+</plist>`,
+  );
 
   return appDir;
 }
