@@ -9,9 +9,7 @@ const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const COOKIE_KEY = "session_cookie";
 
-// Use /tmp directly (not os.tmpdir) so paths match the Swift binary's hardcoded path.
-// os.tmpdir() under Raycast returns /var/folders/…/T which differs from /tmp.
-const COOKIE_FILE = "/tmp/cedarsearch-cookie.txt";
+const COOKIE_FILE = path.join(environment.supportPath, "auth-cookie.txt");
 
 // ─── Cookie storage ────────────────────────────────────────────────────────
 
@@ -57,7 +55,7 @@ export async function launchAuthBrowser(): Promise<string> {
   await writeFile(COOKIE_FILE, "", { mode: 0o600 });
 
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn("open", ["-n", "-W", appBundle], { stdio: "ignore" });
+    const proc = spawn("open", ["-n", "-W", appBundle, "--args", COOKIE_FILE], { stdio: "ignore" });
     proc.on("close", () => resolve());
     proc.on("error", reject);
   });

@@ -7,20 +7,21 @@
 
 /* eslint-disable @typescript-eslint/ban-types */
 
-type ExtensionPreferences = {};
+type ExtensionPreferences = {}
 
 /** Preferences accessible in all the extension's commands */
-declare type Preferences = ExtensionPreferences;
+declare type Preferences = ExtensionPreferences
 
 declare namespace Preferences {
   /** Preferences accessible in the `search-directory` command */
   export type SearchDirectory = ExtensionPreferences & {
-    /** Demo Mode - Redact personal information for screenshots and demos */
-    demoMode: boolean;
-  };
+  /** Demo Mode - Redact personal information for screenshots and demos */
+  "demoMode": boolean
+}
 }
 
 declare namespace Arguments {
   /** Arguments passed to the `search-directory` command */
-  export type SearchDirectory = {};
+  export type SearchDirectory = {}
 }
+
