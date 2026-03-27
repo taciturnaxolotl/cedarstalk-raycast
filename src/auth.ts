@@ -1,11 +1,12 @@
 import { environment, LocalStorage, showToast, Toast } from "@raycast/api";
-import { exec, spawn } from "child_process";
-import { mkdir, readFile, stat, symlink, unlink, writeFile } from "fs/promises";
+import { exec, execFile, spawn } from "child_process";
+import { mkdir, readFile, rm, stat, symlink, unlink, writeFile } from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const COOKIE_KEY = "session_cookie";
 
 // Use /tmp directly (not os.tmpdir) so paths match the Swift binary's hardcoded path.
@@ -108,7 +109,7 @@ async function ensureBinary(): Promise<string> {
   try {
     // Use `xcrun swiftc` (not the raw path) so xcrun sets up DEVELOPER_DIR and
     // the correct SDK — running the swiftc binary directly loses that context.
-    await execAsync(`xcrun swiftc -O "${swiftSrc}" -o "${binaryPath}"`);
+    await execFileAsync("xcrun", ["swiftc", "-O", swiftSrc, "-o", binaryPath]);
   } finally {
     await toast.hide();
   }
@@ -123,7 +124,7 @@ async function ensureAppBundle(binaryPath: string): Promise<string> {
   const bundledBinary = path.join(macosDir, "auth-browser");
 
   // Always recreate fresh so Launch Services sees a new bundle.
-  await execAsync(`rm -rf "${appDir}"`).catch(() => {});
+  await rm(appDir, { recursive: true, force: true }).catch(() => {});
   await mkdir(macosDir, { recursive: true });
   await symlink(binaryPath, bundledBinary);
 
