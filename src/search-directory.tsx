@@ -29,7 +29,10 @@ import {
   clearCookie,
   drainPendingCookie,
   getStoredCookie,
+  hasSignedInBefore,
   launchAuthBrowser,
+  refreshCookieSilently,
+  signOut,
   storeCookie,
 } from "./auth";
 import { getCacheSize, mergePeopleIntoCache, searchCache } from "./cache";
@@ -742,6 +745,8 @@ export default function SearchDirectory() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [populations, setPopulations] = useState<Population[]>([]);
   const searchRef = useRef<AbortController | null>(null);
+  // Guards against renewing in a loop; cleared once a search actually succeeds.
+  const renewedRef = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -752,6 +757,12 @@ export default function SearchDirectory() {
           await storeCookie(pending);
           cookie = pending;
         }
+      }
+
+      // No cookie but a known SSO session: renew in the background rather than
+      // asking for a click that would only ever be answered one way.
+      if (!cookie && (await hasSignedInBefore())) {
+        cookie = await refreshCookieSilently();
       }
 
       if (cookie) {
@@ -821,6 +832,7 @@ export default function SearchDirectory() {
         }
 
         if (!controller.signal.aborted) {
+          renewedRef.current = false;
           await mergePeopleIntoCache(fresh);
           setCacheSize(await getCacheSize());
 
@@ -834,8 +846,31 @@ export default function SearchDirectory() {
       } catch (err) {
         if (controller.signal.aborted) return;
         if (err instanceof AuthRequiredError) {
-          await clearCookie();
-          setAuthState({ kind: "sign-in" });
+          // The site's own cookie expires in hours; the SSO session behind it
+          // lasts weeks. Renew from that first — no window, no typing. One
+          // attempt only: a renewed cookie that still gets rejected would
+          // otherwise send us round this loop forever.
+          if (renewedRef.current) {
+            await clearCookie();
+            setAuthState({ kind: "sign-in" });
+            return;
+          }
+          renewedRef.current = true;
+          const toast = await showToast({
+            style: Toast.Style.Animated,
+            title: "Session expired — renewing…",
+          });
+          const renewed = await refreshCookieSilently();
+          if (controller.signal.aborted) return;
+          if (renewed) {
+            toast.hide();
+            // Re-running the search is the effect's job; new cookie, new run.
+            setAuthState({ kind: "ready", cookie: renewed });
+          } else {
+            toast.hide();
+            await clearCookie();
+            setAuthState({ kind: "sign-in" });
+          }
         } else {
           await showToast({
             style: Toast.Style.Failure,
@@ -867,7 +902,7 @@ export default function SearchDirectory() {
   }, [results, authState]);
 
   async function handleSignOut() {
-    await clearCookie();
+    await signOut();
     setResults([]);
     // Always use the base URL — let the server issue a fresh SAML redirect
     // when the browser opens, rather than using a potentially stale one.
@@ -906,7 +941,7 @@ export default function SearchDirectory() {
       <List>
         <List.EmptyView
           title="Sign in to Cedarville"
-          description="A small sign-in window will open. No browser or cookies are touched."
+          description="A small sign-in window will open. Your browser is never touched; the session is kept locally so this only happens once."
           icon={Icon.Lock}
           actions={
             <ActionPanel>

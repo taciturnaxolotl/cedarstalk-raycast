@@ -22,7 +22,13 @@ You need a Cedarville University account to use this extension.
 3. Complete SSO login with your Cedarville credentials
 4. The window closes automatically and you're ready to search
 
-Your session cookie is stored securely in Raycast's local storage. Use **Sign Out** (⌘⇧S) from any result to log out.
+Your session cookie is stored in Raycast's local storage. The site's own session
+only lasts a few hours, so the sign-in window also keeps its SSO session in an
+owner-only file in the extension's support directory, and renews the site cookie
+silently in the background when it expires. In practice you sign in once.
+
+Use **Sign Out** (⌘⇧S) from any result to log out — that clears the stored SSO
+session too, so the next sign-in asks for your password again.
 
 ## Note
 

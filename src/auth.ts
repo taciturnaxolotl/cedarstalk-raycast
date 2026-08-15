@@ -8,8 +8,13 @@ import { promisify } from "util";
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const COOKIE_KEY = "session_cookie";
+// Set once a sign-in has succeeded, so we know a silent renewal is worth trying
+// before falling back to the sign-in screen.
+const SSO_KEY = "sso_established";
 
 const COOKIE_FILE = path.join(environment.supportPath, "auth-cookie.txt");
+// The auth browser's saved session. Owner-only; the helper writes it 0600.
+const JAR_FILE = path.join(environment.supportPath, "sso-jar.json");
 
 // ─── Cookie storage ────────────────────────────────────────────────────────
 
@@ -19,10 +24,23 @@ export async function getStoredCookie(): Promise<string | undefined> {
 
 export async function storeCookie(cookie: string): Promise<void> {
   await LocalStorage.setItem(COOKIE_KEY, cookie);
+  await LocalStorage.setItem(SSO_KEY, true);
 }
 
 export async function clearCookie(): Promise<void> {
   await LocalStorage.removeItem(COOKIE_KEY);
+}
+
+export async function hasSignedInBefore(): Promise<boolean> {
+  return (await LocalStorage.getItem<boolean>(SSO_KEY)) === true;
+}
+
+// Full sign-out: the app cookie, the memory that SSO was ever set up, and the
+// SSO session itself.
+export async function signOut(): Promise<void> {
+  await LocalStorage.removeItem(COOKIE_KEY);
+  await LocalStorage.removeItem(SSO_KEY);
+  await clearAuthBrowserSession();
 }
 
 // If Raycast closed mid-auth but the Swift app finished and wrote the cookie,
@@ -39,34 +57,79 @@ export async function drainPendingCookie(): Promise<string | undefined> {
 
 // ─── Auth browser ──────────────────────────────────────────────────────────
 
+// Raised when a silent refresh reaches a page that wants the user (password,
+// MFA prompt) — the caller should fall back to a visible sign-in.
+export class InteractionRequiredError extends Error {
+  constructor() {
+    super("Sign-in needs your input.");
+    this.name = "InteractionRequiredError";
+  }
+}
+
 // Opens an isolated WKWebView window via a temporary .app bundle so macOS
 // grants it proper window-server access via Launch Services.
 //
 // The Swift source in assets/auth-browser.swift is compiled on first launch
 // and cached in supportPath — no pre-built binary is shipped with the
 // extension. Compilation requires the Xcode Command Line Tools (swiftc).
-export async function launchAuthBrowser(): Promise<string> {
-  const binaryPath = await ensureBinary();
-  const appBundle = await ensureAppBundle(binaryPath);
-
+export async function launchAuthBrowser(options?: {
+  silent?: boolean;
+}): Promise<string> {
   await unlink(COOKIE_FILE).catch(() => {});
   // Pre-create with owner-only permissions so the cookie is never world-readable.
   // Swift writes non-atomically to preserve these permissions.
   await writeFile(COOKIE_FILE, "", { mode: 0o600 });
 
-  await new Promise<void>((resolve, reject) => {
-    const proc = spawn("open", ["-n", "-W", appBundle, "--args", COOKIE_FILE], { stdio: "ignore" });
-    proc.on("close", () => resolve());
-    proc.on("error", reject);
-  });
+  await runBrowser([
+    COOKIE_FILE,
+    "--jar",
+    JAR_FILE,
+    ...(options?.silent ? ["--silent"] : []),
+  ]);
 
   const cookie = await readFile(COOKIE_FILE, "utf-8")
     .then((s) => s.trim())
     .catch(() => "");
   await unlink(COOKIE_FILE).catch(() => {});
 
-  if (!cookie) throw new Error("Sign-in cancelled.");
-  return cookie;
+  // `open -W` swallows the helper's exit code, so the cookie file is the only
+  // signal. Silently failing means the SSO session needs the user.
+  if (cookie) return cookie;
+  throw options?.silent
+    ? new InteractionRequiredError()
+    : new Error("Sign-in cancelled.");
+}
+
+// Re-auth without a window. Works whenever the SSO session behind the app's
+// own cookie is still alive, which is the common case — the app cookie expires
+// in hours, the SSO session in months.
+export async function refreshCookieSilently(): Promise<string | undefined> {
+  try {
+    const cookie = await launchAuthBrowser({ silent: true });
+    await storeCookie(cookie);
+    return cookie;
+  } catch {
+    return undefined;
+  }
+}
+
+// Drops the SSO session the auth browser keeps, so signing out is real.
+export async function clearAuthBrowserSession(): Promise<void> {
+  await runBrowser(["--jar", JAR_FILE, "--logout"]).catch(() => {});
+  await unlink(JAR_FILE).catch(() => {});
+}
+
+async function runBrowser(args: string[]): Promise<void> {
+  const binaryPath = await ensureBinary();
+  const appBundle = await ensureAppBundle(binaryPath);
+
+  return new Promise<void>((resolve, reject) => {
+    const proc = spawn("open", ["-n", "-W", appBundle, "--args", ...args], {
+      stdio: "ignore",
+    });
+    proc.on("close", () => resolve());
+    proc.on("error", reject);
+  });
 }
 
 // Compile assets/auth-browser.swift on first launch; cache in supportPath.
