@@ -134,6 +134,7 @@ class AuthBrowser: NSObject, NSApplicationDelegate, WKNavigationDelegate, NSWind
     var webView: WKWebView!
     var cookieObserver: CookieObserver!
     var didComplete = false
+    var retriesLeft = 2
 
     func applicationDidFinishLaunching(_: Notification) {
         if LOGOUT {
@@ -185,6 +186,15 @@ class AuthBrowser: NSObject, NSApplicationDelegate, WKNavigationDelegate, NSWind
     }
 
     func webView(_ webView: WKWebView, didFinish _: WKNavigation!) {
+        // The site sometimes bounces a perfectly valid assertion to its own
+        // error page and sets no session. Starting the flow over gets a fresh
+        // request id, which sticks.
+        if webView.url?.path.contains("NotAuthorized") == true, retriesLeft > 0 {
+            retriesLeft -= 1
+            webView.load(URLRequest(url: SIGN_IN_URL))
+            return
+        }
+
         checkCookies(in: webView.configuration.websiteDataStore.httpCookieStore)
         webView.evaluateJavaScript(PROBE_JS) { [weak self] result, _ in
             guard let self, !self.didComplete else { return }
