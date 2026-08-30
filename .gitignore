@@ -2,3 +2,7 @@ node_modules/
 dist/
 .DS_Store
 assets/compiled_raycast_swift/
+
+# local scraping output — personal data, keep it off GitHub
+data/
+names.csv
